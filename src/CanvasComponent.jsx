@@ -37,10 +37,26 @@ const CanvasComponent = () => {
         const context = canvas.getContext("2d");
         context.scale(2, 2);
         context.lineCap = "round";
-        context.strokeStyle = "black";
-        context.lineWidth = 5;
+        context.fillStyle = "black";
+        context.lineWidth = 50;
         contextRef.current = context;
     }, []);
+
+    const preprocessTensor = (tensor) => {
+        // Preprocess the canvas data and make prediction
+        // Note: The preprocessing steps depend on the model requirements
+        // Resize to 28 x 28
+        const resized = tf.image.resizeBilinear(tensor, [28, 28]).toFloat();
+         const grayscale = tf.image.rgbToGrayscale(resized);
+        // Normalize the image
+        const offset = tf.scalar(255.0);
+        const normalized = grayscale.div(offset);
+
+        // We add a dimension to get a batch shape
+        const batched = normalized.expandDims(0).squeeze(3);
+        console.log('batched:', batched);
+        return batched;
+    }
 
     const handlePrediction = async () => {
         if (!model) return;
@@ -52,10 +68,15 @@ const CanvasComponent = () => {
         // Note: The preprocessing steps depend on the model requirements
 
         const tensor = tf.browser.fromPixels(context.getImageData(0, 0, canvas.width, canvas.height));
+
         const processedTensor = preprocessTensor(tensor); // Define this function based on your model needs
-        const prediction = await model.predict(processedTensor).data();
-        
-        setPrediction(prediction); // Update state with the predicted digit
+        // const prediction = await model.predict(processedTensor).data();
+        const predictions = model.predict(processedTensor);
+        console.log('prediction:', predictions);   
+        predictions.print();    
+        const digit = predictions.argMax(1).dataSync()[0];
+     
+        setPrediction(digit); // Update state with the predicted digit
     };
 
     const startDrawing = ({ nativeEvent }) => {
@@ -75,6 +96,9 @@ const CanvasComponent = () => {
             return;
         }
         const { offsetX, offsetY } = nativeEvent;
+        contextRef.lineCap = "round";
+        contextRef.current.strokeStyle = "white";
+
         contextRef.current.lineTo(offsetX, offsetY);
         contextRef.current.stroke();
     };
@@ -84,11 +108,12 @@ const CanvasComponent = () => {
             <canvas
                 onMouseDown={startDrawing}
                 onMouseUp={finishDrawing}
+                onMouseOut={finishDrawing}
                 onMouseMove={draw}
                 ref={canvasRef}
                 />
             <button onClick={handlePrediction}>Predict Digit</button>
-                {prediction && <div>Predicted Digit: {prediction}</div>}
+            {prediction && <div>Predicted Digit: {prediction}</div>}
         </div>
     );
 };
